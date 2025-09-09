@@ -102,10 +102,10 @@ class IsolatedContextFactory extends BaseContextFactory {
   }
 
   protected override async _doObtainBrowser(clientInfo: ClientInfo): Promise<playwright.Browser> {
-    if (!this.config.browser.browserName) {
+    if (!this.config.browser.browserName)
       throw new Error('Browser type not specified. In dynamic mode, browser instances should be created using create_browser_instance tool.');
-    }
-    
+
+
     await injectCdpPort(this.config.browser);
     const browserType = playwright[this.config.browser.browserName];
     const tracesDir = await outputFile(this.config, clientInfo.rootPath, `traces`);
@@ -148,10 +148,10 @@ class RemoteContextFactory extends BaseContextFactory {
   }
 
   protected override async _doObtainBrowser(): Promise<playwright.Browser> {
-    if (!this.config.browser.browserName) {
+    if (!this.config.browser.browserName)
       throw new Error('Browser type not specified for remote connection. Browser type is required for remote endpoints.');
-    }
-    
+
+
     const url = new URL(this.config.browser.remoteEndpoint!);
     url.searchParams.set('browser', this.config.browser.browserName);
     if (this.config.browser.launchOptions)
@@ -176,10 +176,10 @@ class PersistentContextFactory implements BrowserContextFactory {
   }
 
   async createContext(clientInfo: ClientInfo): Promise<{ browserContext: playwright.BrowserContext, close: () => Promise<void> }> {
-    if (!this.config.browser.browserName) {
+    if (!this.config.browser.browserName)
       throw new Error('Browser type not specified for persistent context. Browser type is required for persistent contexts.');
-    }
-    
+
+
     await injectCdpPort(this.config.browser);
     testDebug('create browser context (persistent)');
     const userDataDir = this.config.browser.userDataDir ?? await this._createUserDataDir(clientInfo.rootPath);

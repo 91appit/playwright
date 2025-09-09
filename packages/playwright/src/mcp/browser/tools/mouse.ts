@@ -20,8 +20,8 @@ import { defineTabTool } from './tool';
 const elementSchema = z.object({
   element: z.string().describe('Human-readable element description used to obtain permission to interact with the element'),
 
-      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
-    });
+  instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
+});
 
 const mouseMove = defineTabTool({
   capability: 'vision',

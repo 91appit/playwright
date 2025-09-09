@@ -41,8 +41,8 @@ export const elementSchema = z.object({
   element: z.string().describe('Human-readable element description used to obtain permission to interact with the element'),
   ref: z.string().describe('Exact target element reference from the page snapshot'),
 
-      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
-    });
+  instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
+});
 
 const clickSchema = elementSchema.extend({
   doubleClick: z.boolean().optional().describe('Whether to perform a double click instead of a single click'),
@@ -96,7 +96,7 @@ const drag = defineTabTool({
       startRef: z.string().describe('Exact source element reference from the page snapshot'),
       endElement: z.string().describe('Human-readable target element description used to obtain the permission to interact with the element'),
       endRef: z.string().describe('Exact target element reference from the page snapshot'),
-    
+
       instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
     }),
     type: 'destructive',

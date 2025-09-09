@@ -18,13 +18,13 @@ import { test, expect } from './fixtures';
 
 test('list all tools', async ({ startClient }) => {
   const { client } = await startClient();
-  
+
   const tools = await client.listTools();
   console.log('Available tools:');
   tools.tools.forEach(tool => {
     console.log(`- ${tool.name}: ${tool.description}`);
   });
-  
+
   const toolNames = tools.tools.map(t => t.name);
   expect(toolNames).toContain('create_browser_instance');
   expect(toolNames).toContain('close_browser_instance');

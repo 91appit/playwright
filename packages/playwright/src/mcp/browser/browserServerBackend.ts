@@ -29,6 +29,14 @@ import type { Tool } from './tools/tool';
 import type { BrowserContextFactory } from './browserContextFactory';
 import type * as mcpServer from '../sdk/server';
 import type { ServerBackend } from '../sdk/server';
+import type { Tab } from './tab';
+
+// Mock context that implements the minimal interface required by Response class
+type MockContext = Pick<Context, 'config' | 'tabs' | 'currentTab' | 'currentTabOrDie'> & {
+  tools: Tool[];
+  sessionLog: SessionLog | undefined;
+  options: null;
+};
 
 export class BrowserServerBackend implements ServerBackend {
   private _tools: Tool[];
@@ -53,7 +61,7 @@ export class BrowserServerBackend implements ServerBackend {
       rootPath = url ? fileURLToPath(url) : undefined;
     }
     this._sessionLog = this._config.saveSession ? await SessionLog.create(this._config, rootPath) : undefined;
-    
+
     // Legacy mode: If browser is configured, create a default context
     if (this._config.browser.browserName) {
       this._defaultContextId = 'default';
@@ -76,32 +84,32 @@ export class BrowserServerBackend implements ServerBackend {
     const tool = this._tools.find(tool => tool.schema.name === name)!;
     if (!tool)
       throw new Error(`Tool "${name}" not found`);
-    
+
     // Handle browser management tools specially
-    if (name === 'create_browser_instance') {
+    if (name === 'create_browser_instance')
       return this._handleCreateBrowserInstance(rawArguments);
-    }
-    if (name === 'close_browser_instance') {
+
+    if (name === 'close_browser_instance')
       return this._handleCloseBrowserInstance(rawArguments);
-    }
-    if (name === 'list_browser_instances') {
+
+    if (name === 'list_browser_instances')
       return this._handleListBrowserInstances(rawArguments);
-    }
-    
+
+
     const parsedArguments = tool.schema.inputSchema.parse(rawArguments || {});
-    
+
     // Determine which context to use
     let context: Context;
     const instanceId = (parsedArguments as any).instanceId;
-    
+
     console.log(`[DEBUG] Tool: ${name}, instanceId: ${instanceId}, contexts.size: ${this._contexts.size}`);
-    
+
     if (instanceId) {
       // Multi-browser mode: Use specified instance
       const targetContext = this._contexts.get(instanceId);
-      if (!targetContext) {
+      if (!targetContext)
         throw new Error(`Browser instance "${instanceId}" not found. Use create_browser_instance to create a new instance or check the instanceId.`);
-      }
+
       context = targetContext;
       console.log(`[DEBUG] Using specified instanceId: ${instanceId}`);
     } else {
@@ -112,9 +120,9 @@ export class BrowserServerBackend implements ServerBackend {
       } else if (this._contexts.size === 1) {
         // If only one context exists, use it (regardless of whether it's default or not)
         const firstContext = this._contexts.values().next().value;
-        if (!firstContext) {
+        if (!firstContext)
           throw new Error('Unexpected error: context map corrupted.');
-        }
+
         context = firstContext;
         console.log(`[DEBUG] Using single context: ${Array.from(this._contexts.keys())[0]}`);
       } else {
@@ -123,7 +131,7 @@ export class BrowserServerBackend implements ServerBackend {
         throw new Error('Multiple browser instances available. Please specify instanceId parameter to choose which browser instance to use.');
       }
     }
-    
+
     const response = new Response(context, name, parsedArguments);
     context.setRunningTool(name);
     try {
@@ -140,7 +148,7 @@ export class BrowserServerBackend implements ServerBackend {
 
   serverClosed() {
     void Promise.all(
-      Array.from(this._contexts.values()).map(context => context.dispose().catch(logUnhandledError))
+        Array.from(this._contexts.values()).map(context => context.dispose().catch(logUnhandledError))
     );
   }
 
@@ -149,7 +157,7 @@ export class BrowserServerBackend implements ServerBackend {
    */
   async createBrowserInstance(browserType: 'chromium' | 'firefox' | 'webkit', clientInfo?: any): Promise<string> {
     const instanceId = this._generateInstanceId();
-    
+
     // Create a temporary config with the specified browser type
     const instanceConfig = {
       ...this._config,
@@ -158,10 +166,10 @@ export class BrowserServerBackend implements ServerBackend {
         browserName: browserType,
       }
     };
-    
+
     // Create a new context factory for this browser type
     const instanceFactory = this._createBrowserContextFactory(instanceConfig);
-    
+
     const context = new Context({
       tools: this._tools,
       config: instanceConfig,
@@ -169,7 +177,7 @@ export class BrowserServerBackend implements ServerBackend {
       sessionLog: this._sessionLog,
       clientInfo: clientInfo || { name: 'MCP', version: '1.0.0' },
     });
-    
+
     this._contexts.set(instanceId, context);
     return instanceId;
   }
@@ -179,17 +187,17 @@ export class BrowserServerBackend implements ServerBackend {
    */
   async closeBrowserInstance(instanceId: string): Promise<void> {
     const context = this._contexts.get(instanceId);
-    if (!context) {
+    if (!context)
       throw new Error(`Browser instance "${instanceId}" not found.`);
-    }
-    
+
+
     await context.dispose();
     this._contexts.delete(instanceId);
-    
+
     // If this was the default context, clear the default
-    if (this._defaultContextId === instanceId) {
+    if (this._defaultContextId === instanceId)
       this._defaultContextId = undefined;
-    }
+
   }
 
   /**
@@ -215,9 +223,9 @@ export class BrowserServerBackend implements ServerBackend {
       browserType: z.enum(['chromium', 'firefox', 'webkit']).describe('The type of browser to launch'),
     });
     const params = schema.parse(rawArguments || {});
-    
+
     // Create a mock context for the response (we don't have a browser context yet)
-    const mockContext = {
+    const mockContext: MockContext = {
       tools: this._tools,
       config: this._config,
       sessionLog: this._sessionLog,
@@ -225,10 +233,10 @@ export class BrowserServerBackend implements ServerBackend {
       tabs: () => [],
       currentTab: () => undefined,
       currentTabOrDie: () => { throw new Error('No context available for browser management'); },
-    } as any;
-    
-    const response = new Response(mockContext, 'create_browser_instance', params);
-    
+    };
+
+    const response = new Response(mockContext as Context, 'create_browser_instance', params);
+
     try {
       const instanceId = await this.createBrowserInstance(params.browserType);
       response.addResult(`Successfully created ${params.browserType} browser instance with ID: ${instanceId}`);
@@ -244,8 +252,8 @@ export class BrowserServerBackend implements ServerBackend {
       instanceId: z.string().describe('The instanceId of the browser instance to close'),
     });
     const params = schema.parse(rawArguments || {});
-    
-    const mockContext = {
+
+    const mockContext: MockContext = {
       tools: this._tools,
       config: this._config,
       sessionLog: this._sessionLog,
@@ -253,10 +261,10 @@ export class BrowserServerBackend implements ServerBackend {
       tabs: () => [],
       currentTab: () => undefined,
       currentTabOrDie: () => { throw new Error('No context available for browser management'); },
-    } as any;
-    
-    const response = new Response(mockContext, 'close_browser_instance', params);
-    
+    };
+
+    const response = new Response(mockContext as Context, 'close_browser_instance', params);
+
     try {
       await this.closeBrowserInstance(params.instanceId);
       response.addResult(`Successfully closed browser instance: ${params.instanceId}`);
@@ -268,7 +276,7 @@ export class BrowserServerBackend implements ServerBackend {
   }
 
   private async _handleListBrowserInstances(rawArguments: any) {
-    const mockContext = {
+    const mockContext: MockContext = {
       tools: this._tools,
       config: this._config,
       sessionLog: this._sessionLog,
@@ -276,16 +284,16 @@ export class BrowserServerBackend implements ServerBackend {
       tabs: () => [],
       currentTab: () => undefined,
       currentTabOrDie: () => { throw new Error('No context available for browser management'); },
-    } as any;
-    
-    const response = new Response(mockContext, 'list_browser_instances', {});
-    
+    };
+
+    const response = new Response(mockContext as Context, 'list_browser_instances', {});
+
     try {
       const instances = this.getActiveInstances();
-      const instancesText = instances.length > 0 
+      const instancesText = instances.length > 0
         ? instances.map(inst => `- ${inst.instanceId} (${inst.browserType})`).join('\n')
         : 'No active browser instances';
-        
+
       response.addResult(`Active browser instances:\n${instancesText}`);
       return response.serialize();
     } catch (error: any) {

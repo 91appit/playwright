@@ -78,7 +78,7 @@ const verifyList = defineTabTool({
       element: z.string().describe('Human-readable list description'),
       ref: z.string().describe('Exact target element reference that points to the list'),
       items: z.array(z.string()).describe('Items to verify'),
-    
+
       instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
     }),
     type: 'readOnly',
@@ -115,7 +115,7 @@ const verifyValue = defineTabTool({
       element: z.string().describe('Human-readable element description'),
       ref: z.string().describe('Exact target element reference that points to the element'),
       value: z.string().describe('Value to verify. For checkbox, use "true" or "false".'),
-    
+
       instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
     }),
     type: 'readOnly',

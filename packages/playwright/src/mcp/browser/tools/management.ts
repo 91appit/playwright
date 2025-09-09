@@ -59,7 +59,7 @@ const listBrowserInstances = defineTool({
   capability: 'core',
 
   schema: {
-    name: 'list_browser_instances', 
+    name: 'list_browser_instances',
     title: 'List Browser Instances',
     description: 'List all active browser instances with their instanceIds and browser types',
     inputSchema: z.object({}),

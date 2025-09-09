@@ -26,7 +26,7 @@ const uploadFile = defineTabTool({
     description: 'Upload one or multiple files',
     inputSchema: z.object({
       paths: z.array(z.string()).describe('The absolute paths to the files to upload. Can be a single file or multiple files.'),
-    
+
       instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
     }),
     type: 'destructive',

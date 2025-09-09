@@ -25,14 +25,14 @@ test.describe('multi-browser support', () => {
       name: 'list_browser_instances',
       arguments: {}
     });
-    
+
     // If we started with a default instance, we need to close it first to test dynamic mode
     if (initialList.content[0].text.includes('default')) {
       await client.callTool({
         name: 'close_browser_instance',
         arguments: { instanceId: 'default' }
       });
-      
+
       // Verify no instances after closing default
       const emptyList = await client.callTool({
         name: 'list_browser_instances',
@@ -48,19 +48,19 @@ test.describe('multi-browser support', () => {
     });
     expect(chromeResult.content[0].text).toContain('Successfully created chromium browser instance');
     expect(chromeResult.content[0].text).toContain('ID: browser-');
-    
+
     // Extract instance ID from response text
     const chromeMatch = chromeResult.content[0].text.match(/ID: (browser-[a-zA-Z0-9-]+)/);
     expect(chromeMatch).toBeTruthy();
     const chromeInstanceId = chromeMatch![1];
 
-    // Create a firefox instance  
+    // Create a firefox instance
     const firefoxResult = await client.callTool({
       name: 'create_browser_instance',
       arguments: { browserType: 'firefox' }
     });
     expect(firefoxResult.content[0].text).toContain('Successfully created firefox browser instance');
-    
+
     const firefoxMatch = firefoxResult.content[0].text.match(/ID: (browser-[a-zA-Z0-9-]+)/);
     expect(firefoxMatch).toBeTruthy();
     const firefoxInstanceId = firefoxMatch![1];
@@ -132,7 +132,7 @@ test.describe('multi-browser support', () => {
         instanceId: 'non-existent-id'
       }
     });
-    
+
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Browser instance "non-existent-id" not found');
   });
@@ -178,11 +178,11 @@ test.describe('multi-browser support', () => {
       name: 'browser_navigate',
       arguments: { url: 'data:text/html,<h1>Test</h1>' }
     });
-    
+
     console.log('Navigation result:', result);
     console.log('isError:', result.isError);
     console.log('Content:', result.content[0].text);
-    
+
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Multiple browser instances available');
   });
