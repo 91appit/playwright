@@ -26,6 +26,7 @@ const navigate = defineTool({
     description: 'Navigate to a URL',
     inputSchema: z.object({
       url: z.string().describe('The URL to navigate to'),
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
     }),
     type: 'destructive',
   },
@@ -45,7 +46,9 @@ const goBack = defineTabTool({
     name: 'browser_navigate_back',
     title: 'Go back',
     description: 'Go back to the previous page',
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
+    }),
     type: 'readOnly',
   },
 

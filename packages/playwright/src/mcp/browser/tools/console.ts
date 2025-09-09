@@ -23,7 +23,9 @@ const console = defineTabTool({
     name: 'browser_console_messages',
     title: 'Get console messages',
     description: 'Returns all console messages',
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
+    }),
     type: 'readOnly',
   },
   handle: async (tab, params, response) => {

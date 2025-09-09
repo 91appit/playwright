@@ -33,6 +33,7 @@ const fillForm = defineTabTool({
         ref: z.string().describe('Exact target field reference from the page snapshot'),
         value: z.string().describe('Value to fill in the field. If the field is a checkbox, the value should be `true` or `false`. If the field is a combobox, the value should be the text of the option.'),
       })).describe('Fields to fill in'),
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
     }),
     type: 'destructive',
   },

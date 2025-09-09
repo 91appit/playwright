@@ -26,7 +26,9 @@ const tracingStart = defineTool({
     name: 'browser_start_tracing',
     title: 'Start tracing',
     description: 'Start trace recording',
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
+    }),
     type: 'readOnly',
   },
 
@@ -56,7 +58,9 @@ const tracingStop = defineTool({
     name: 'browser_stop_tracing',
     title: 'Stop tracing',
     description: 'Stop trace recording',
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
+    }),
     type: 'readOnly',
   },
 

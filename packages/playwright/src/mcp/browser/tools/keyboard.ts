@@ -28,6 +28,8 @@ const pressKey = defineTabTool({
     description: 'Press a key on the keyboard',
     inputSchema: z.object({
       key: z.string().describe('Name of the key to press or a character to generate, such as `ArrowLeft` or `a`'),
+
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
     }),
     type: 'destructive',
   },

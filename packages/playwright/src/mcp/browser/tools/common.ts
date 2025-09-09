@@ -24,7 +24,9 @@ const close = defineTool({
     name: 'browser_close',
     title: 'Close browser',
     description: 'Close the page',
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
+    }),
     type: 'readOnly',
   },
 
@@ -44,6 +46,8 @@ const resize = defineTabTool({
     inputSchema: z.object({
       width: z.number().describe('Width of the browser window'),
       height: z.number().describe('Height of the browser window'),
+
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
     }),
     type: 'readOnly',
   },
