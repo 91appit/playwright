@@ -26,7 +26,9 @@ const requests = defineTabTool({
     name: 'browser_network_requests',
     title: 'List network requests',
     description: 'Returns all network requests since loading the page',
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
+    }),
     type: 'readOnly',
   },
 

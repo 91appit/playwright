@@ -57,7 +57,7 @@ export type CLIOptions = {
 
 const defaultConfig: FullConfig = {
   browser: {
-    browserName: 'chromium',
+    // browserName: 'chromium', // Removed default to support dynamic mode
     launchOptions: {
       channel: 'chrome',
       headless: os.platform() === 'linux' && !process.env.DISPLAY,
@@ -83,7 +83,7 @@ type BrowserUserConfig = NonNullable<Config['browser']>;
 
 export type FullConfig = Config & {
   browser: Omit<BrowserUserConfig, 'browserName'> & {
-    browserName: 'chromium' | 'firefox' | 'webkit';
+    browserName?: 'chromium' | 'firefox' | 'webkit'; // Allow undefined for dynamic mode
     launchOptions: NonNullable<BrowserUserConfig['launchOptions']>;
     contextOptions: NonNullable<BrowserUserConfig['contextOptions']>;
   },
@@ -280,7 +280,7 @@ function mergeConfig(base: FullConfig, overrides: Config): FullConfig {
   const browser: FullConfig['browser'] = {
     ...pickDefined(base.browser),
     ...pickDefined(overrides.browser),
-    browserName: overrides.browser?.browserName ?? base.browser?.browserName ?? 'chromium',
+    browserName: overrides.browser?.browserName ?? base.browser?.browserName, // Allow undefined for dynamic mode
     isolated: overrides.browser?.isolated ?? base.browser?.isolated ?? false,
     launchOptions: {
       ...pickDefined(base.browser?.launchOptions),

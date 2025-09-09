@@ -27,6 +27,8 @@ const browserTabs = defineTool({
     inputSchema: z.object({
       action: z.enum(['list', 'new', 'close', 'select']).describe('Operation to perform'),
       index: z.number().optional().describe('Tab index, used for close/select. If omitted for close, current tab is closed.'),
+    
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
     }),
     type: 'destructive',
   },

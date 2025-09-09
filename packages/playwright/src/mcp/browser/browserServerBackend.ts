@@ -22,6 +22,8 @@ import { Response } from './response';
 import { SessionLog } from './sessionLog';
 import { filteredTools } from './tools';
 import { toMcpTool } from '../sdk/tool';
+import { contextFactory } from './browserContextFactory';
+import { z } from '../sdk/bundle';
 
 import type { Tool } from './tools/tool';
 import type { BrowserContextFactory } from './browserContextFactory';
@@ -30,7 +32,8 @@ import type { ServerBackend } from '../sdk/server';
 
 export class BrowserServerBackend implements ServerBackend {
   private _tools: Tool[];
-  private _context: Context | undefined;
+  private _contexts: Map<string, Context>;
+  private _defaultContextId: string | undefined;
   private _sessionLog: SessionLog | undefined;
   private _config: FullConfig;
   private _browserContextFactory: BrowserContextFactory;
@@ -39,6 +42,7 @@ export class BrowserServerBackend implements ServerBackend {
     this._config = config;
     this._browserContextFactory = factory;
     this._tools = filteredTools(config);
+    this._contexts = new Map();
   }
 
   async initialize(server: mcpServer.Server, clientVersion: mcpServer.ClientVersion, roots: mcpServer.Root[]): Promise<void> {
@@ -49,25 +53,115 @@ export class BrowserServerBackend implements ServerBackend {
       rootPath = url ? fileURLToPath(url) : undefined;
     }
     this._sessionLog = this._config.saveSession ? await SessionLog.create(this._config, rootPath) : undefined;
-    this._context = new Context({
-      tools: this._tools,
-      config: this._config,
-      browserContextFactory: this._browserContextFactory,
-      sessionLog: this._sessionLog,
-      clientInfo: { ...clientVersion, rootPath },
-    });
+    
+    // Legacy mode: If browser is configured, create a default context
+    if (this._config.browser.browserName) {
+      this._defaultContextId = 'default';
+      const context = new Context({
+        tools: this._tools,
+        config: this._config,
+        browserContextFactory: this._browserContextFactory,
+        sessionLog: this._sessionLog,
+        clientInfo: { ...clientVersion, rootPath },
+      });
+      this._contexts.set(this._defaultContextId, context);
+    }
   }
 
   async listTools(): Promise<mcpServer.Tool[]> {
-    return this._tools.map(tool => toMcpTool(tool.schema));
+    const regularTools = this._tools.map(tool => toMcpTool(tool.schema));
+    
+    // Add browser management tools
+    const managementTools: mcpServer.Tool[] = [
+      {
+        name: 'create_browser_instance',
+        description: 'Create a new browser instance with the specified browser type. Returns an instanceId that can be used with other tools.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            browserType: {
+              type: 'string',
+              enum: ['chromium', 'firefox', 'webkit'],
+              description: 'The type of browser to launch. Chromium includes Chrome, Edge, and other Chromium-based browsers.'
+            }
+          },
+          required: ['browserType']
+        }
+      },
+      {
+        name: 'close_browser_instance',
+        description: 'Close and dispose a browser instance by its instanceId. All tabs and resources associated with this instance will be cleaned up.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            instanceId: {
+              type: 'string',
+              description: 'The instanceId of the browser instance to close'
+            }
+          },
+          required: ['instanceId']
+        }
+      },
+      {
+        name: 'list_browser_instances',
+        description: 'List all active browser instances with their instanceIds and browser types',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      }
+    ];
+    
+    return [...regularTools, ...managementTools];
   }
 
   async callTool(name: string, rawArguments: mcpServer.CallToolRequest['params']['arguments']) {
     const tool = this._tools.find(tool => tool.schema.name === name)!;
     if (!tool)
       throw new Error(`Tool "${name}" not found`);
+    
+    // Handle browser management tools specially
+    if (name === 'create_browser_instance') {
+      return this._handleCreateBrowserInstance(rawArguments);
+    }
+    if (name === 'close_browser_instance') {
+      return this._handleCloseBrowserInstance(rawArguments);
+    }
+    if (name === 'list_browser_instances') {
+      return this._handleListBrowserInstances(rawArguments);
+    }
+    
     const parsedArguments = tool.schema.inputSchema.parse(rawArguments || {});
-    const context = this._context!;
+    
+    // Determine which context to use
+    let context: Context;
+    const instanceId = (parsedArguments as any).instanceId;
+    
+    if (instanceId) {
+      // Multi-browser mode: Use specified instance
+      const targetContext = this._contexts.get(instanceId);
+      if (!targetContext) {
+        throw new Error(`Browser instance "${instanceId}" not found. Use create_browser_instance to create a new instance or check the instanceId.`);
+      }
+      context = targetContext;
+    } else {
+      // Legacy mode: Use default context if available
+      if (this._defaultContextId && this._contexts.has(this._defaultContextId)) {
+        context = this._contexts.get(this._defaultContextId)!;
+      } else if (this._contexts.size === 1) {
+        // If only one context exists, use it
+        const firstContext = this._contexts.values().next().value;
+        if (!firstContext) {
+          throw new Error('Unexpected error: context map corrupted.');
+        }
+        context = firstContext;
+      } else if (this._contexts.size === 0) {
+        throw new Error('No browser instances available. Use create_browser_instance to create a new instance or specify a browser type at startup.');
+      } else {
+        throw new Error('Multiple browser instances available. Please specify instanceId parameter to choose which browser instance to use.');
+      }
+    }
+    
     const response = new Response(context, name, parsedArguments);
     context.setRunningTool(name);
     try {
@@ -83,6 +177,171 @@ export class BrowserServerBackend implements ServerBackend {
   }
 
   serverClosed() {
-    void this._context?.dispose().catch(logUnhandledError);
+    void Promise.all(
+      Array.from(this._contexts.values()).map(context => context.dispose().catch(logUnhandledError))
+    );
+  }
+
+  /**
+   * Create a new browser instance with the specified browser type
+   */
+  async createBrowserInstance(browserType: 'chromium' | 'firefox' | 'webkit', clientInfo?: any): Promise<string> {
+    const instanceId = this._generateInstanceId();
+    
+    // Create a temporary config with the specified browser type
+    const instanceConfig = {
+      ...this._config,
+      browser: {
+        ...this._config.browser,
+        browserName: browserType,
+      }
+    };
+    
+    // Create a new context factory for this browser type
+    const instanceFactory = this._createBrowserContextFactory(instanceConfig);
+    
+    const context = new Context({
+      tools: this._tools,
+      config: instanceConfig,
+      browserContextFactory: instanceFactory,
+      sessionLog: this._sessionLog,
+      clientInfo: clientInfo || { name: 'MCP', version: '1.0.0' },
+    });
+    
+    this._contexts.set(instanceId, context);
+    return instanceId;
+  }
+
+  /**
+   * Close and dispose a browser instance
+   */
+  async closeBrowserInstance(instanceId: string): Promise<void> {
+    const context = this._contexts.get(instanceId);
+    if (!context) {
+      throw new Error(`Browser instance "${instanceId}" not found.`);
+    }
+    
+    await context.dispose();
+    this._contexts.delete(instanceId);
+    
+    // If this was the default context, clear the default
+    if (this._defaultContextId === instanceId) {
+      this._defaultContextId = undefined;
+    }
+  }
+
+  /**
+   * Get list of active browser instances
+   */
+  getActiveInstances(): Array<{ instanceId: string, browserType: string }> {
+    return Array.from(this._contexts.entries()).map(([instanceId, context]) => ({
+      instanceId,
+      browserType: context.config.browser.browserName || 'unknown',
+    }));
+  }
+
+  private _generateInstanceId(): string {
+    return `browser-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  private _createBrowserContextFactory(config: FullConfig): BrowserContextFactory {
+    return contextFactory(config);
+  }
+
+  private async _handleCreateBrowserInstance(rawArguments: any) {
+    const schema = z.object({
+      browserType: z.enum(['chromium', 'firefox', 'webkit']).describe('The type of browser to launch'),
+    });
+    const params = schema.parse(rawArguments || {});
+    
+    try {
+      const instanceId = await this.createBrowserInstance(params.browserType);
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Successfully created ${params.browserType} browser instance with ID: ${instanceId}`,
+          }
+        ],
+        meta: {
+          instanceId,
+          browserType: params.browserType,
+        }
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Error creating browser instance: ${error.message}`,
+          }
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private async _handleCloseBrowserInstance(rawArguments: any) {
+    const schema = z.object({
+      instanceId: z.string().describe('The instanceId of the browser instance to close'),
+    });
+    const params = schema.parse(rawArguments || {});
+    
+    try {
+      await this.closeBrowserInstance(params.instanceId);
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Successfully closed browser instance: ${params.instanceId}`,
+          }
+        ],
+        meta: {
+          instanceId: params.instanceId,
+        }
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Error closing browser instance: ${error.message}`,
+          }
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private async _handleListBrowserInstances(rawArguments: any) {
+    try {
+      const instances = this.getActiveInstances();
+      const instancesText = instances.length > 0 
+        ? instances.map(inst => `- ${inst.instanceId} (${inst.browserType})`).join('\n')
+        : 'No active browser instances';
+        
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Active browser instances:\n${instancesText}`,
+          }
+        ],
+        meta: {
+          instances,
+          count: instances.length,
+        }
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Error listing browser instances: ${error.message}`,
+          }
+        ],
+        isError: true,
+      };
+    }
   }
 }

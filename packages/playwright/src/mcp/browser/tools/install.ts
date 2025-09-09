@@ -26,7 +26,9 @@ const install = defineTool({
     name: 'browser_install',
     title: 'Install the browser specified in the config',
     description: 'Install the browser specified in the config. Call this if you get an error about the browser not being installed.',
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+      instanceId: z.string().optional().describe('Browser instance ID. If not provided, uses default instance.'),
+    }),
     type: 'destructive',
   },
 
