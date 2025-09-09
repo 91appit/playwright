@@ -169,6 +169,102 @@ PW_HMR=1 npx playwright codegen
 - `tests/library/playwright.config.ts` - Library test configuration
 - `tests/playwright-test/playwright.config.ts` - Test runner configuration
 
+## MCP (Model Context Protocol) Development
+
+**MCP Architecture Overview:**
+The MCP components in `packages/playwright/src/mcp/` implement a sophisticated multi-browser architecture for Model Context Protocol integration. This enables Playwright to work as an MCP server providing browser automation tools to AI agents.
+
+**Key MCP Directories:**
+- `packages/playwright/src/mcp/browser/` - Multi-browser context factories and backend
+- `packages/playwright/src/mcp/sdk/` - MCP SDK implementation and server logic
+- `packages/playwright/src/mcp/extension/` - Browser extension integration
+- `packages/playwright/src/mcp/test/` - MCP-specific test utilities
+
+**Multi-Browser Architecture Patterns:**
+
+**Context Factory Pattern:**
+Multiple `BrowserContextFactory` implementations handle different connection modes:
+```typescript
+// Located in packages/playwright/src/mcp/browser/browserContextFactory.ts
+- RemoteContextFactory    // Connect to remote browser instances
+- CdpContextFactory      // Chrome DevTools Protocol connections  
+- IsolatedContextFactory // Isolated, temporary browser contexts
+- PersistentContextFactory // Persistent user data directory contexts
+- ExtensionContextFactory // Browser extension-based connections
+```
+
+**Backend Architecture:**
+- `BrowserServerBackend` - Main MCP server backend for browser automation
+- `ProxyBackend` - Proxy backend allowing runtime switching between providers
+- Tool registration and filtering system for capability management
+
+**Tool Development Patterns:**
+
+**MCP Tool Structure:**
+Tools follow a consistent pattern in `packages/playwright/src/mcp/browser/tools/`:
+```typescript
+// Tool interface implementation
+interface Tool {
+  name: string;
+  description: string; 
+  schema: object;
+  call(params: any, context: Context): Promise<ToolResult>;
+}
+```
+
+**Tool Registration:**
+- Tools are registered through `filteredTools()` function
+- Capability-based filtering (e.g., vision, PDF capabilities)
+- Tools are converted to MCP format via `toMcpTool()`
+
+**Development Workflow for MCP:**
+
+**Testing MCP Components:**
+```bash
+# Run MCP-specific tests
+npm run ctest -- --grep "mcp"
+
+# Test specific MCP functionality
+node -e "
+const { createConnection } = require('./packages/playwright/lib/mcp');
+// Test MCP server creation and tool registration
+"
+```
+
+**MCP Configuration Patterns:**
+- Configuration merging through `resolveCLIConfig()` and `resolveConfig()`
+- Support for dotenv secrets loading
+- Browser launch options with MCP-specific defaults
+
+**Extension Integration:**
+- Browser extension connectivity for Chrome/Edge
+- Extension context factory for persistent browser connections
+- Requires "Playwright MCP Bridge" browser extension
+
+**Common MCP Development Tasks:**
+
+**Adding New Tools:**
+1. Create tool in `packages/playwright/src/mcp/browser/tools/`
+2. Implement the `Tool` interface with proper schema
+3. Add to tool registration in `tools.ts`
+4. Test with MCP test utilities
+
+**Multi-Browser Support:**
+- Use appropriate context factory for target browser
+- Handle browser-specific capabilities and limitations
+- Test across different connection modes (remote, CDP, extension)
+
+**MCP Server Configuration:**
+- Server backend factory pattern for different MCP modes
+- Transport layer abstraction for various connection types
+- Client version compatibility handling
+
+**Important MCP Notes:**
+- MCP tools must handle browser context lifecycle properly
+- Extension mode requires specific browser setup
+- Tool schemas must be valid JSON Schema for MCP compatibility
+- Always test tool registration and filtering logic
+
 ## CI/CD and GitHub Actions
 
 **Main Workflows:**
