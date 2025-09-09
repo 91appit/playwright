@@ -31,13 +31,6 @@ import type * as mcpServer from '../sdk/server';
 import type { ServerBackend } from '../sdk/server';
 import type { Tab } from './tab';
 
-// Mock context that implements the minimal interface required by Response class
-type MockContext = Pick<Context, 'config' | 'tabs' | 'currentTab' | 'currentTabOrDie'> & {
-  tools: Tool[];
-  sessionLog: SessionLog | undefined;
-  options: null;
-};
-
 export class BrowserServerBackend implements ServerBackend {
   private _tools: Tool[];
   private _contexts: Map<string, Context>;
@@ -102,8 +95,6 @@ export class BrowserServerBackend implements ServerBackend {
     let context: Context;
     const instanceId = (parsedArguments as any).instanceId;
 
-    console.log(`[DEBUG] Tool: ${name}, instanceId: ${instanceId}, contexts.size: ${this._contexts.size}`);
-
     if (instanceId) {
       // Multi-browser mode: Use specified instance
       const targetContext = this._contexts.get(instanceId);
@@ -111,10 +102,8 @@ export class BrowserServerBackend implements ServerBackend {
         throw new Error(`Browser instance "${instanceId}" not found. Use create_browser_instance to create a new instance or check the instanceId.`);
 
       context = targetContext;
-      console.log(`[DEBUG] Using specified instanceId: ${instanceId}`);
     } else {
       // Legacy mode behavior when no instanceId provided
-      console.log(`[DEBUG] No instanceId provided, contexts: ${Array.from(this._contexts.keys()).join(', ')}`);
       if (this._contexts.size === 0) {
         throw new Error('No browser instances available. Use create_browser_instance to create a new instance or specify a browser type at startup.');
       } else if (this._contexts.size === 1) {
@@ -124,10 +113,8 @@ export class BrowserServerBackend implements ServerBackend {
           throw new Error('Unexpected error: context map corrupted.');
 
         context = firstContext;
-        console.log(`[DEBUG] Using single context: ${Array.from(this._contexts.keys())[0]}`);
       } else {
         // Multiple contexts exist - require instanceId
-        console.log(`[DEBUG] Multiple contexts exist, should throw error`);
         throw new Error('Multiple browser instances available. Please specify instanceId parameter to choose which browser instance to use.');
       }
     }
@@ -218,87 +205,80 @@ export class BrowserServerBackend implements ServerBackend {
     return contextFactory(config);
   }
 
-  private async _handleCreateBrowserInstance(rawArguments: any) {
+  private async _handleCreateBrowserInstance(rawArguments: mcpServer.CallToolRequest['params']['arguments']) {
     const schema = z.object({
       browserType: z.enum(['chromium', 'firefox', 'webkit']).describe('The type of browser to launch'),
     });
     const params = schema.parse(rawArguments || {});
 
-    // Create a mock context for the response (we don't have a browser context yet)
-    const mockContext: MockContext = {
-      tools: this._tools,
-      config: this._config,
-      sessionLog: this._sessionLog,
-      options: null,
-      tabs: () => [],
-      currentTab: () => undefined,
-      currentTabOrDie: () => { throw new Error('No context available for browser management'); },
-    };
-
-    const response = new Response(mockContext as Context, 'create_browser_instance', params);
-
     try {
       const instanceId = await this.createBrowserInstance(params.browserType);
-      response.addResult(`Successfully created ${params.browserType} browser instance with ID: ${instanceId}`);
-      return response.serialize();
+      return {
+        content: [{ 
+          type: 'text' as const, 
+          text: `### Result\nSuccessfully created ${params.browserType} browser instance with ID: ${instanceId}` 
+        }],
+        isError: false
+      };
     } catch (error: any) {
-      response.addError(`Error creating browser instance: ${error.message}`);
-      return response.serialize();
+      return {
+        content: [{ 
+          type: 'text' as const, 
+          text: `### Result\nError creating browser instance: ${error.message}` 
+        }],
+        isError: true
+      };
     }
   }
 
-  private async _handleCloseBrowserInstance(rawArguments: any) {
+  private async _handleCloseBrowserInstance(rawArguments: mcpServer.CallToolRequest['params']['arguments']) {
     const schema = z.object({
       instanceId: z.string().describe('The instanceId of the browser instance to close'),
     });
     const params = schema.parse(rawArguments || {});
 
-    const mockContext: MockContext = {
-      tools: this._tools,
-      config: this._config,
-      sessionLog: this._sessionLog,
-      options: null,
-      tabs: () => [],
-      currentTab: () => undefined,
-      currentTabOrDie: () => { throw new Error('No context available for browser management'); },
-    };
-
-    const response = new Response(mockContext as Context, 'close_browser_instance', params);
-
     try {
       await this.closeBrowserInstance(params.instanceId);
-      response.addResult(`Successfully closed browser instance: ${params.instanceId}`);
-      return response.serialize();
+      return {
+        content: [{ 
+          type: 'text' as const, 
+          text: `### Result\nSuccessfully closed browser instance: ${params.instanceId}` 
+        }],
+        isError: false
+      };
     } catch (error: any) {
-      response.addError(`Error closing browser instance: ${error.message}`);
-      return response.serialize();
+      return {
+        content: [{ 
+          type: 'text' as const, 
+          text: `### Result\nError closing browser instance: ${error.message}` 
+        }],
+        isError: true
+      };
     }
   }
 
-  private async _handleListBrowserInstances(rawArguments: any) {
-    const mockContext: MockContext = {
-      tools: this._tools,
-      config: this._config,
-      sessionLog: this._sessionLog,
-      options: null,
-      tabs: () => [],
-      currentTab: () => undefined,
-      currentTabOrDie: () => { throw new Error('No context available for browser management'); },
-    };
-
-    const response = new Response(mockContext as Context, 'list_browser_instances', {});
-
+  private async _handleListBrowserInstances(rawArguments: mcpServer.CallToolRequest['params']['arguments']) {
     try {
       const instances = this.getActiveInstances();
       const instancesText = instances.length > 0
         ? instances.map(inst => `- ${inst.instanceId} (${inst.browserType})`).join('\n')
         : 'No active browser instances';
 
-      response.addResult(`Active browser instances:\n${instancesText}`);
-      return response.serialize();
+      return {
+        content: [{ 
+          type: 'text' as const, 
+          text: `### Result\nActive browser instances:\n${instancesText}` 
+        }],
+        isError: false
+      };
     } catch (error: any) {
-      response.addError(`Error listing browser instances: ${error.message}`);
-      return response.serialize();
+      return {
+        content: [{ 
+          type: 'text' as const, 
+          text: `### Result\nError listing browser instances: ${error.message}` 
+        }],
+        isError: true
+      };
     }
   }
 }
