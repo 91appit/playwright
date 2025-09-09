@@ -31,9 +31,8 @@ const createBrowserInstance = defineTool({
   },
 
   handle: async (context, params, response) => {
-    // Since this is a management tool, we need to access the BrowserServerBackend
-    // We'll need to implement this differently - we need access to the backend from the context
-    throw new Error('Browser management tools need to be implemented at the backend level');
+    // This will be handled specially in the BrowserServerBackend
+    response.addError('Browser management tools should be handled at the backend level');
   },
 });
 
@@ -51,9 +50,8 @@ const closeBrowserInstance = defineTool({
   },
 
   handle: async (context, params, response) => {
-    // Since this is a management tool, we need to access the BrowserServerBackend
-    // We'll need to implement this differently - we need access to the backend from the context
-    throw new Error('Browser management tools need to be implemented at the backend level');
+    // This will be handled specially in the BrowserServerBackend
+    response.addError('Browser management tools should be handled at the backend level');
   },
 });
 
@@ -69,9 +67,8 @@ const listBrowserInstances = defineTool({
   },
 
   handle: async (context, params, response) => {
-    // Since this is a management tool, we need to access the BrowserServerBackend
-    // We'll need to implement this differently - we need access to the backend from the context
-    throw new Error('Browser management tools need to be implemented at the backend level');
+    // This will be handled specially in the BrowserServerBackend
+    response.addError('Browser management tools should be handled at the backend level');
   },
 });
 

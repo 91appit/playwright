@@ -32,6 +32,7 @@ import tabs from './tools/tabs';
 import tracing from './tools/tracing';
 import wait from './tools/wait';
 import verify from './tools/verify';
+import management from './tools/management';
 
 import type { Tool } from './tools/tool';
 import type { FullConfig } from './config';
@@ -55,6 +56,7 @@ export const allTools: Tool<any>[] = [
   ...tracing,
   ...wait,
   ...verify,
+  ...management,
 ];
 
 export function filteredTools(config: FullConfig) {

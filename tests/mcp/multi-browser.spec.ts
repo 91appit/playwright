@@ -20,37 +20,66 @@ test.describe('multi-browser support', () => {
   test('should create and manage multiple browser instances', async ({ startClient }) => {
     const { client } = await startClient(); // Start in dynamic mode (no browser specified)
 
+    // First, verify we start with no instances (dynamic mode)
+    const initialList = await client.callTool({
+      name: 'list_browser_instances',
+      arguments: {}
+    });
+    
+    // If we started with a default instance, we need to close it first to test dynamic mode
+    if (initialList.content[0].text.includes('default')) {
+      await client.callTool({
+        name: 'close_browser_instance',
+        arguments: { instanceId: 'default' }
+      });
+      
+      // Verify no instances after closing default
+      const emptyList = await client.callTool({
+        name: 'list_browser_instances',
+        arguments: {}
+      });
+      expect(emptyList.content[0].text).toContain('No active browser instances');
+    }
+
     // Create a chromium instance
     const chromeResult = await client.callTool({
       name: 'create_browser_instance',
       arguments: { browserType: 'chromium' }
     });
-    expect(chromeResult.meta?.instanceId).toBeTruthy();
-    expect(chromeResult.meta?.browserType).toBe('chromium');
-    const chromeInstanceId = chromeResult.meta?.instanceId;
+    expect(chromeResult.content[0].text).toContain('Successfully created chromium browser instance');
+    expect(chromeResult.content[0].text).toContain('ID: browser-');
+    
+    // Extract instance ID from response text
+    const chromeMatch = chromeResult.content[0].text.match(/ID: (browser-[a-zA-Z0-9-]+)/);
+    expect(chromeMatch).toBeTruthy();
+    const chromeInstanceId = chromeMatch![1];
 
-    // Create a firefox instance
+    // Create a firefox instance  
     const firefoxResult = await client.callTool({
       name: 'create_browser_instance',
       arguments: { browserType: 'firefox' }
     });
-    expect(firefoxResult.meta?.instanceId).toBeTruthy();
-    expect(firefoxResult.meta?.browserType).toBe('firefox');
-    const firefoxInstanceId = firefoxResult.meta?.instanceId;
+    expect(firefoxResult.content[0].text).toContain('Successfully created firefox browser instance');
+    
+    const firefoxMatch = firefoxResult.content[0].text.match(/ID: (browser-[a-zA-Z0-9-]+)/);
+    expect(firefoxMatch).toBeTruthy();
+    const firefoxInstanceId = firefoxMatch![1];
 
     // List instances - should show both
     const listResult = await client.callTool({
       name: 'list_browser_instances',
       arguments: {}
     });
-    expect(listResult.meta?.count).toBe(2);
-    expect(listResult.meta?.instances).toHaveLength(2);
+    expect(listResult.content[0].text).toContain(chromeInstanceId);
+    expect(listResult.content[0].text).toContain(firefoxInstanceId);
+    expect(listResult.content[0].text).toContain('chromium');
+    expect(listResult.content[0].text).toContain('firefox');
 
-    // Navigate with specific instance ID
+    // Try to navigate with specific instance ID (use server.HELLO_WORLD for a working URL)
     await client.callTool({
       name: 'browser_navigate',
       arguments: {
-        url: 'https://example.com',
+        url: 'data:text/html,<h1>Chrome Test</h1>',
         instanceId: chromeInstanceId
       }
     });
@@ -58,25 +87,25 @@ test.describe('multi-browser support', () => {
     await client.callTool({
       name: 'browser_navigate',
       arguments: {
-        url: 'https://google.com',
+        url: 'data:text/html,<h1>Firefox Test</h1>',
         instanceId: firefoxInstanceId
       }
     });
 
     // Close one instance
-    await client.callTool({
+    const closeResult = await client.callTool({
       name: 'close_browser_instance',
       arguments: { instanceId: firefoxInstanceId }
     });
+    expect(closeResult.content[0].text).toContain(`Successfully closed browser instance: ${firefoxInstanceId}`);
 
     // List instances - should show only one now
     const listResultAfterClose = await client.callTool({
       name: 'list_browser_instances',
       arguments: {}
     });
-    expect(listResultAfterClose.meta?.count).toBe(1);
-    expect(listResultAfterClose.meta?.instances).toHaveLength(1);
-    expect(listResultAfterClose.meta?.instances[0].instanceId).toBe(chromeInstanceId);
+    expect(listResultAfterClose.content[0].text).toContain(chromeInstanceId);
+    expect(listResultAfterClose.content[0].text).not.toContain(firefoxInstanceId);
 
     // Close remaining instance
     await client.callTool({
@@ -89,17 +118,17 @@ test.describe('multi-browser support', () => {
       name: 'list_browser_instances',
       arguments: {}
     });
-    expect(listResultFinal.meta?.count).toBe(0);
+    expect(listResultFinal.content[0].text).toContain('No active browser instances');
   });
 
   test('should handle invalid instance IDs gracefully', async ({ startClient }) => {
     const { client } = await startClient();
 
-    // Try to use a non-existent instance ID
+    // Try to use a non-existent instance ID - should fail
     const result = await client.callTool({
       name: 'browser_navigate',
       arguments: {
-        url: 'https://example.com',
+        url: 'data:text/html,<h1>Test</h1>',
         instanceId: 'non-existent-id'
       }
     });
@@ -114,7 +143,7 @@ test.describe('multi-browser support', () => {
     // This should work without instanceId in legacy mode
     await client.callTool({
       name: 'browser_navigate',
-      arguments: { url: 'https://example.com' }
+      arguments: { url: 'data:text/html,<h1>Legacy Test</h1>' }
     });
 
     // Should also work with tools that don't need instanceId
@@ -137,11 +166,22 @@ test.describe('multi-browser support', () => {
       arguments: { browserType: 'firefox' }
     });
 
+    // List instances to verify we have two
+    const listResult = await client.callTool({
+      name: 'list_browser_instances',
+      arguments: {}
+    });
+    console.log('Instances after creating two:', listResult.content[0].text);
+
     // Try to navigate without instanceId - should fail
     const result = await client.callTool({
       name: 'browser_navigate',
-      arguments: { url: 'https://example.com' }
+      arguments: { url: 'data:text/html,<h1>Test</h1>' }
     });
+    
+    console.log('Navigation result:', result);
+    console.log('isError:', result.isError);
+    console.log('Content:', result.content[0].text);
     
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Multiple browser instances available');

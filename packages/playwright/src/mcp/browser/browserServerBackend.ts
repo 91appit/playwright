@@ -69,50 +69,7 @@ export class BrowserServerBackend implements ServerBackend {
   }
 
   async listTools(): Promise<mcpServer.Tool[]> {
-    const regularTools = this._tools.map(tool => toMcpTool(tool.schema));
-    
-    // Add browser management tools
-    const managementTools: mcpServer.Tool[] = [
-      {
-        name: 'create_browser_instance',
-        description: 'Create a new browser instance with the specified browser type. Returns an instanceId that can be used with other tools.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            browserType: {
-              type: 'string',
-              enum: ['chromium', 'firefox', 'webkit'],
-              description: 'The type of browser to launch. Chromium includes Chrome, Edge, and other Chromium-based browsers.'
-            }
-          },
-          required: ['browserType']
-        }
-      },
-      {
-        name: 'close_browser_instance',
-        description: 'Close and dispose a browser instance by its instanceId. All tabs and resources associated with this instance will be cleaned up.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            instanceId: {
-              type: 'string',
-              description: 'The instanceId of the browser instance to close'
-            }
-          },
-          required: ['instanceId']
-        }
-      },
-      {
-        name: 'list_browser_instances',
-        description: 'List all active browser instances with their instanceIds and browser types',
-        inputSchema: {
-          type: 'object',
-          properties: {}
-        }
-      }
-    ];
-    
-    return [...regularTools, ...managementTools];
+    return this._tools.map(tool => toMcpTool(tool.schema));
   }
 
   async callTool(name: string, rawArguments: mcpServer.CallToolRequest['params']['arguments']) {
@@ -137,6 +94,8 @@ export class BrowserServerBackend implements ServerBackend {
     let context: Context;
     const instanceId = (parsedArguments as any).instanceId;
     
+    console.log(`[DEBUG] Tool: ${name}, instanceId: ${instanceId}, contexts.size: ${this._contexts.size}`);
+    
     if (instanceId) {
       // Multi-browser mode: Use specified instance
       const targetContext = this._contexts.get(instanceId);
@@ -144,20 +103,23 @@ export class BrowserServerBackend implements ServerBackend {
         throw new Error(`Browser instance "${instanceId}" not found. Use create_browser_instance to create a new instance or check the instanceId.`);
       }
       context = targetContext;
+      console.log(`[DEBUG] Using specified instanceId: ${instanceId}`);
     } else {
-      // Legacy mode: Use default context if available
-      if (this._defaultContextId && this._contexts.has(this._defaultContextId)) {
-        context = this._contexts.get(this._defaultContextId)!;
+      // Legacy mode behavior when no instanceId provided
+      console.log(`[DEBUG] No instanceId provided, contexts: ${Array.from(this._contexts.keys()).join(', ')}`);
+      if (this._contexts.size === 0) {
+        throw new Error('No browser instances available. Use create_browser_instance to create a new instance or specify a browser type at startup.');
       } else if (this._contexts.size === 1) {
-        // If only one context exists, use it
+        // If only one context exists, use it (regardless of whether it's default or not)
         const firstContext = this._contexts.values().next().value;
         if (!firstContext) {
           throw new Error('Unexpected error: context map corrupted.');
         }
         context = firstContext;
-      } else if (this._contexts.size === 0) {
-        throw new Error('No browser instances available. Use create_browser_instance to create a new instance or specify a browser type at startup.');
+        console.log(`[DEBUG] Using single context: ${Array.from(this._contexts.keys())[0]}`);
       } else {
+        // Multiple contexts exist - require instanceId
+        console.log(`[DEBUG] Multiple contexts exist, should throw error`);
         throw new Error('Multiple browser instances available. Please specify instanceId parameter to choose which browser instance to use.');
       }
     }
@@ -254,30 +216,26 @@ export class BrowserServerBackend implements ServerBackend {
     });
     const params = schema.parse(rawArguments || {});
     
+    // Create a mock context for the response (we don't have a browser context yet)
+    const mockContext = {
+      tools: this._tools,
+      config: this._config,
+      sessionLog: this._sessionLog,
+      options: null,
+      tabs: () => [],
+      currentTab: () => undefined,
+      currentTabOrDie: () => { throw new Error('No context available for browser management'); },
+    } as any;
+    
+    const response = new Response(mockContext, 'create_browser_instance', params);
+    
     try {
       const instanceId = await this.createBrowserInstance(params.browserType);
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `Successfully created ${params.browserType} browser instance with ID: ${instanceId}`,
-          }
-        ],
-        meta: {
-          instanceId,
-          browserType: params.browserType,
-        }
-      };
+      response.addResult(`Successfully created ${params.browserType} browser instance with ID: ${instanceId}`);
+      return response.serialize();
     } catch (error: any) {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `Error creating browser instance: ${error.message}`,
-          }
-        ],
-        isError: true,
-      };
+      response.addError(`Error creating browser instance: ${error.message}`);
+      return response.serialize();
     }
   }
 
@@ -287,61 +245,52 @@ export class BrowserServerBackend implements ServerBackend {
     });
     const params = schema.parse(rawArguments || {});
     
+    const mockContext = {
+      tools: this._tools,
+      config: this._config,
+      sessionLog: this._sessionLog,
+      options: null,
+      tabs: () => [],
+      currentTab: () => undefined,
+      currentTabOrDie: () => { throw new Error('No context available for browser management'); },
+    } as any;
+    
+    const response = new Response(mockContext, 'close_browser_instance', params);
+    
     try {
       await this.closeBrowserInstance(params.instanceId);
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `Successfully closed browser instance: ${params.instanceId}`,
-          }
-        ],
-        meta: {
-          instanceId: params.instanceId,
-        }
-      };
+      response.addResult(`Successfully closed browser instance: ${params.instanceId}`);
+      return response.serialize();
     } catch (error: any) {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `Error closing browser instance: ${error.message}`,
-          }
-        ],
-        isError: true,
-      };
+      response.addError(`Error closing browser instance: ${error.message}`);
+      return response.serialize();
     }
   }
 
   private async _handleListBrowserInstances(rawArguments: any) {
+    const mockContext = {
+      tools: this._tools,
+      config: this._config,
+      sessionLog: this._sessionLog,
+      options: null,
+      tabs: () => [],
+      currentTab: () => undefined,
+      currentTabOrDie: () => { throw new Error('No context available for browser management'); },
+    } as any;
+    
+    const response = new Response(mockContext, 'list_browser_instances', {});
+    
     try {
       const instances = this.getActiveInstances();
       const instancesText = instances.length > 0 
         ? instances.map(inst => `- ${inst.instanceId} (${inst.browserType})`).join('\n')
         : 'No active browser instances';
         
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `Active browser instances:\n${instancesText}`,
-          }
-        ],
-        meta: {
-          instances,
-          count: instances.length,
-        }
-      };
+      response.addResult(`Active browser instances:\n${instancesText}`);
+      return response.serialize();
     } catch (error: any) {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `Error listing browser instances: ${error.message}`,
-          }
-        ],
-        isError: true,
-      };
+      response.addError(`Error listing browser instances: ${error.message}`);
+      return response.serialize();
     }
   }
 }
