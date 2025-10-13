@@ -29,7 +29,6 @@ import type { Tool } from './tools/tool';
 import type { BrowserContextFactory } from './browserContextFactory';
 import type * as mcpServer from '../sdk/server';
 import type { ServerBackend } from '../sdk/server';
-import type { Tab } from './tab';
 
 export class BrowserServerBackend implements ServerBackend {
   private _tools: Tool[];
@@ -115,7 +114,9 @@ export class BrowserServerBackend implements ServerBackend {
         context = firstContext;
       } else {
         // Multiple contexts exist - require instanceId
-        throw new Error('Multiple browser instances available. Please specify instanceId parameter to choose which browser instance to use.');
+        const instances = this.getActiveInstances();
+        const instancesList = instances.map(inst => `  - ${inst.instanceId} (${inst.browserType})`).join('\n');
+        throw new Error(`Multiple browser instances available. Please specify instanceId parameter to choose which browser instance to use.\n\nAvailable instances:\n${instancesList}\n\nYou can also use the 'list_browser_instances' tool to see all active instances.`);
       }
     }
 
@@ -214,17 +215,17 @@ export class BrowserServerBackend implements ServerBackend {
     try {
       const instanceId = await this.createBrowserInstance(params.browserType);
       return {
-        content: [{ 
-          type: 'text' as const, 
-          text: `### Result\nSuccessfully created ${params.browserType} browser instance with ID: ${instanceId}` 
+        content: [{
+          type: 'text' as const,
+          text: `### Result\nSuccessfully created ${params.browserType} browser instance with ID: ${instanceId}`
         }],
         isError: false
       };
     } catch (error: any) {
       return {
-        content: [{ 
-          type: 'text' as const, 
-          text: `### Result\nError creating browser instance: ${error.message}` 
+        content: [{
+          type: 'text' as const,
+          text: `### Result\nError creating browser instance: ${error.message}`
         }],
         isError: true
       };
@@ -240,17 +241,17 @@ export class BrowserServerBackend implements ServerBackend {
     try {
       await this.closeBrowserInstance(params.instanceId);
       return {
-        content: [{ 
-          type: 'text' as const, 
-          text: `### Result\nSuccessfully closed browser instance: ${params.instanceId}` 
+        content: [{
+          type: 'text' as const,
+          text: `### Result\nSuccessfully closed browser instance: ${params.instanceId}`
         }],
         isError: false
       };
     } catch (error: any) {
       return {
-        content: [{ 
-          type: 'text' as const, 
-          text: `### Result\nError closing browser instance: ${error.message}` 
+        content: [{
+          type: 'text' as const,
+          text: `### Result\nError closing browser instance: ${error.message}`
         }],
         isError: true
       };
@@ -265,17 +266,17 @@ export class BrowserServerBackend implements ServerBackend {
         : 'No active browser instances';
 
       return {
-        content: [{ 
-          type: 'text' as const, 
-          text: `### Result\nActive browser instances:\n${instancesText}` 
+        content: [{
+          type: 'text' as const,
+          text: `### Result\nActive browser instances:\n${instancesText}`
         }],
         isError: false
       };
     } catch (error: any) {
       return {
-        content: [{ 
-          type: 'text' as const, 
-          text: `### Result\nError listing browser instances: ${error.message}` 
+        content: [{
+          type: 'text' as const,
+          text: `### Result\nError listing browser instances: ${error.message}`
         }],
         isError: true
       };

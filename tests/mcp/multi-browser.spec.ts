@@ -186,4 +186,41 @@ test.describe('multi-browser support', () => {
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Multiple browser instances available');
   });
+
+  test('should include instance list in error message when multiple browsers exist', async ({ startClient }) => {
+    const { client } = await startClient();
+
+    // Create two instances
+    const chromeResult = await client.callTool({
+      name: 'create_browser_instance',
+      arguments: { browserType: 'chromium' }
+    });
+    const chromeMatch = chromeResult.content[0].text.match(/ID: (browser-[a-zA-Z0-9-]+)/);
+    const chromeInstanceId = chromeMatch![1];
+
+    const firefoxResult = await client.callTool({
+      name: 'create_browser_instance',
+      arguments: { browserType: 'firefox' }
+    });
+    const firefoxMatch = firefoxResult.content[0].text.match(/ID: (browser-[a-zA-Z0-9-]+)/);
+    const firefoxInstanceId = firefoxMatch![1];
+
+    // Try to navigate without instanceId - should fail with helpful message
+    const result = await client.callTool({
+      name: 'browser_navigate',
+      arguments: { url: 'data:text/html,<h1>Test</h1>' }
+    });
+
+    expect(result.isError).toBe(true);
+
+    // Error message should contain helpful information
+    const errorText = result.content[0].text;
+    expect(errorText).toContain('Multiple browser instances available');
+    expect(errorText).toContain('Available instances:');
+    expect(errorText).toContain(chromeInstanceId);
+    expect(errorText).toContain('chromium');
+    expect(errorText).toContain(firefoxInstanceId);
+    expect(errorText).toContain('firefox');
+    expect(errorText).toContain('list_browser_instances');
+  });
 });

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { test, expect } from './fixtures';
+import { test } from './fixtures';
 
 test('debug instance routing', async ({ startClient }) => {
   const { client } = await startClient();
