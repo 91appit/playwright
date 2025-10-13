@@ -116,7 +116,15 @@ export class BrowserServerBackend implements ServerBackend {
         // Multiple contexts exist - require instanceId
         const instances = this.getActiveInstances();
         const instancesList = instances.map(inst => `  - ${inst.instanceId} (${inst.browserType})`).join('\n');
-        throw new Error(`Multiple browser instances available. Please specify instanceId parameter to choose which browser instance to use.\n\nAvailable instances:\n${instancesList}\n\nYou can also use the 'list_browser_instances' tool to see all active instances.`);
+        const errorMessage = [
+          'Multiple browser instances available. Please specify instanceId parameter to choose which browser instance to use.',
+          '',
+          'Available instances:',
+          instancesList,
+          '',
+          "You can also use the 'list_browser_instances' tool to see all active instances."
+        ].join('\n');
+        throw new Error(errorMessage);
       }
     }
 
