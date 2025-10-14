@@ -97,3 +97,65 @@ test('browser_evaluate (error)', async ({ client, server }) => {
   const errorText = result.content?.[0]?.text || '';
   expect(errorText).toMatch(/not defined|Can't find variable/);
 });
+
+test('browser_evaluate with instanceId in multi-instance environment', async ({ startClient }) => {
+  const { client } = await startClient(); // Start in dynamic mode
+
+  // Create two browser instances
+  const chrome1Result = await client.callTool({
+    name: 'create_browser_instance',
+    arguments: { browserType: 'chromium' }
+  });
+  const chromeMatch = chrome1Result.content[0].text.match(/ID: (browser-[a-zA-Z0-9-]+)/);
+  expect(chromeMatch).toBeTruthy();
+  const chromeInstanceId = chromeMatch![1];
+
+  const chrome2Result = await client.callTool({
+    name: 'create_browser_instance',
+    arguments: { browserType: 'chromium' }
+  });
+  const chrome2Match = chrome2Result.content[0].text.match(/ID: (browser-[a-zA-Z0-9-]+)/);
+  expect(chrome2Match).toBeTruthy();
+  const chrome2InstanceId = chrome2Match![1];
+
+  // Navigate first instance
+  await client.callTool({
+    name: 'browser_navigate',
+    arguments: {
+      url: 'data:text/html,<html><head><title>Instance 1</title></head><body>First</body></html>',
+      instanceId: chromeInstanceId
+    }
+  });
+
+  // Evaluate on first instance - should work
+  const result1 = await client.callTool({
+    name: 'browser_evaluate',
+    arguments: {
+      function: '() => document.title',
+      instanceId: chromeInstanceId
+    }
+  });
+  expect(result1).toHaveResponse({
+    result: `"Instance 1"`,
+  });
+
+  // Try to use evaluate without instanceId when multiple instances exist - should fail
+  const resultNoId = await client.callTool({
+    name: 'browser_evaluate',
+    arguments: {
+      function: '() => document.title'
+    }
+  });
+  expect(resultNoId.isError).toBe(true);
+  expect(resultNoId.content[0].text).toContain('Multiple browser instances available');
+
+  // Clean up
+  await client.callTool({
+    name: 'close_browser_instance',
+    arguments: { instanceId: chromeInstanceId }
+  });
+  await client.callTool({
+    name: 'close_browser_instance',
+    arguments: { instanceId: chrome2InstanceId }
+  });
+});
